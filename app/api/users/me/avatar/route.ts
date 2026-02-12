@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { dbRun } from "@/lib/db";
 import { processImage } from "@/lib/image";
 
 export async function PUT(request: NextRequest) {
@@ -30,10 +30,9 @@ export async function PUT(request: NextRequest) {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const url = await processImage(buffer);
-    const db = getDb();
-    db.prepare("UPDATE users SET avatar_url = ? WHERE id = ?").run(
-      url,
-      session.user.id
+    await dbRun(
+      "UPDATE users SET avatar_url = ? WHERE id = ?",
+      [url, session.user.id]
     );
     return NextResponse.json({ avatar_url: url });
   } catch {

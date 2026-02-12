@@ -1,6 +1,6 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-import { getDb } from "./db";
+import { dbGet } from "./db";
 import { verifyPassword } from "./auth-helpers";
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
@@ -13,18 +13,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       async authorize(credentials) {
         if (!credentials?.username || !credentials?.password) return null;
 
-        const db = getDb();
-        const user = db
-          .prepare(
-            "SELECT id, username, display_name, avatar_url, password_hash FROM users WHERE username = ?"
-          )
-          .get(credentials.username as string) as {
+        const user = await dbGet<{
           id: number;
           username: string;
           display_name: string;
           avatar_url: string | null;
           password_hash: string;
-        } | undefined;
+        }>(
+          "SELECT id, username, display_name, avatar_url, password_hash FROM users WHERE username = ?",
+          [credentials.username as string]
+        );
 
         if (!user) return null;
 

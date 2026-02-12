@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { dbGet, dbRun } from "@/lib/db";
 import { hashPassword } from "@/lib/auth-helpers";
 
 export async function POST(request: NextRequest) {
@@ -26,10 +26,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const db = getDb();
-    const existing = db
-      .prepare("SELECT id FROM users WHERE username = ?")
-      .get(username);
+    const existing = await dbGet<{ id: number }>(
+      "SELECT id FROM users WHERE username = ?",
+      [username]
+    );
     if (existing) {
       return NextResponse.json(
         { error: "Username already taken" },
@@ -38,11 +38,10 @@ export async function POST(request: NextRequest) {
     }
 
     const hash = await hashPassword(password);
-    const result = db
-      .prepare(
-        "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)"
-      )
-      .run(username, hash, username);
+    const result = await dbRun(
+      "INSERT INTO users (username, password_hash, display_name) VALUES (?, ?, ?)",
+      [username, hash, username]
+    );
 
     return NextResponse.json({
       success: true,

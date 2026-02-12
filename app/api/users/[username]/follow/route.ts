@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb, createNotification } from "@/lib/db";
+import { dbGet, dbRun, createNotification } from "@/lib/db";
 
 export async function POST(
   _request: NextRequest,
@@ -12,10 +12,10 @@ export async function POST(
   }
 
   const { username } = await params;
-  const db = getDb();
-  const user = db
-    .prepare("SELECT id FROM users WHERE username = ?")
-    .get(username) as { id: number } | undefined;
+  const user = await dbGet<{ id: number }>(
+    "SELECT id FROM users WHERE username = ?",
+    [username]
+  );
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -27,22 +27,23 @@ export async function POST(
     );
   }
 
-  const existing = db
-    .prepare(
-      "SELECT id FROM follows WHERE follower_id = ? AND following_id = ?"
-    )
-    .get(session.user.id, user.id);
+  const existing = await dbGet(
+    "SELECT id FROM follows WHERE follower_id = ? AND following_id = ?",
+    [session.user.id, user.id]
+  );
 
   if (existing) {
-    db.prepare(
-      "DELETE FROM follows WHERE follower_id = ? AND following_id = ?"
-    ).run(session.user.id, user.id);
+    await dbRun(
+      "DELETE FROM follows WHERE follower_id = ? AND following_id = ?",
+      [session.user.id, user.id]
+    );
     return NextResponse.json({ following: false });
   } else {
-    db.prepare(
-      "INSERT INTO follows (follower_id, following_id) VALUES (?, ?)"
-    ).run(session.user.id, user.id);
-    createNotification(user.id, "follow", Number(session.user.id), null);
+    await dbRun(
+      "INSERT INTO follows (follower_id, following_id) VALUES (?, ?)",
+      [session.user.id, user.id]
+    );
+    await createNotification(user.id, "follow", Number(session.user.id), null);
     return NextResponse.json({ following: true });
   }
 }

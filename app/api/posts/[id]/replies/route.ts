@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb, createNotification } from "@/lib/db";
+import { dbAll, dbRun, dbGet, createNotification } from "@/lib/db";
 import { POST_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(
@@ -13,16 +13,14 @@ export async function GET(
   }
 
   const { id } = await params;
-  const db = getDb();
-  const rows = db
-    .prepare(
-      `SELECT replies_v2.*, u.username, u.display_name, u.avatar_url
-       FROM replies_v2
-       JOIN users u ON u.id = replies_v2.user_id
-       WHERE replies_v2.post_id = ?
-       ORDER BY replies_v2.timestamp ASC`
-    )
-    .all(id);
+  const rows = await dbAll(
+    `SELECT replies_v2.*, u.username, u.display_name, u.avatar_url
+     FROM replies_v2
+     JOIN users u ON u.id = replies_v2.user_id
+     WHERE replies_v2.post_id = ?
+     ORDER BY replies_v2.timestamp ASC`,
+    [id]
+  );
 
   return NextResponse.json(rows);
 }
@@ -52,18 +50,17 @@ export async function POST(
   }
 
   const { id: postId } = await params;
-  const db = getDb();
-  const result = db
-    .prepare(
-      "INSERT INTO replies_v2 (post_id, user_id, text) VALUES (?, ?, ?)"
-    )
-    .run(postId, session.user.id, text);
+  const result = await dbRun(
+    "INSERT INTO replies_v2 (post_id, user_id, text) VALUES (?, ?, ?)",
+    [postId, session.user.id, text]
+  );
 
-  const post = db
-    .prepare("SELECT user_id FROM posts_v2 WHERE id = ?")
-    .get(postId) as { user_id: number } | undefined;
+  const post = await dbGet<{ user_id: number }>(
+    "SELECT user_id FROM posts_v2 WHERE id = ?",
+    [postId]
+  );
   if (post)
-    createNotification(
+    await createNotification(
       post.user_id,
       "reply",
       Number(session.user.id),

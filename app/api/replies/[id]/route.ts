@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { dbRun } from "@/lib/db";
 
 export async function DELETE(
   _request: NextRequest,
@@ -12,10 +12,10 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const db = getDb();
-  const result = db
-    .prepare("DELETE FROM replies_v2 WHERE id = ? AND user_id = ?")
-    .run(id, session.user.id);
+  const result = await dbRun(
+    "DELETE FROM replies_v2 WHERE id = ? AND user_id = ?",
+    [id, session.user.id]
+  );
 
   if (result.changes === 0) {
     return NextResponse.json(

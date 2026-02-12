@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb, createNotification } from "@/lib/db";
+import { dbGet, dbRun, dbAll, createNotification } from "@/lib/db";
 import { MSG_MAX_LENGTH } from "@/lib/constants";
 
 export async function GET(
@@ -13,28 +13,28 @@ export async function GET(
   }
 
   const { username } = await params;
-  const db = getDb();
-  const user = db
-    .prepare("SELECT id FROM users WHERE username = ?")
-    .get(username) as { id: number } | undefined;
+  const user = await dbGet<{ id: number }>(
+    "SELECT id FROM users WHERE username = ?",
+    [username]
+  );
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  db.prepare(
-    "UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?"
-  ).run(user.id, session.user.id);
+  await dbRun(
+    "UPDATE messages SET is_read = 1 WHERE sender_id = ? AND receiver_id = ?",
+    [user.id, session.user.id]
+  );
 
-  const rows = db
-    .prepare(
-      `SELECT m.*, u.username as sender_username, u.display_name as sender_display_name, u.avatar_url as sender_avatar
-       FROM messages m
-       JOIN users u ON u.id = m.sender_id
-       WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
-       ORDER BY m.timestamp ASC`
-    )
-    .all(session.user.id, user.id, user.id, session.user.id);
+  const rows = await dbAll(
+    `SELECT m.*, u.username as sender_username, u.display_name as sender_display_name, u.avatar_url as sender_avatar
+     FROM messages m
+     JOIN users u ON u.id = m.sender_id
+     WHERE (m.sender_id = ? AND m.receiver_id = ?) OR (m.sender_id = ? AND m.receiver_id = ?)
+     ORDER BY m.timestamp ASC`,
+    [session.user.id, user.id, user.id, session.user.id]
+  );
 
   return NextResponse.json(rows);
 }
@@ -64,10 +64,10 @@ export async function POST(
   }
 
   const { username } = await params;
-  const db = getDb();
-  const user = db
-    .prepare("SELECT id FROM users WHERE username = ?")
-    .get(username) as { id: number } | undefined;
+  const user = await dbGet<{ id: number }>(
+    "SELECT id FROM users WHERE username = ?",
+    [username]
+  );
 
   if (!user) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
@@ -79,13 +79,12 @@ export async function POST(
     );
   }
 
-  const result = db
-    .prepare(
-      "INSERT INTO messages (sender_id, receiver_id, text) VALUES (?, ?, ?)"
-    )
-    .run(session.user.id, user.id, text);
+  const result = await dbRun(
+    "INSERT INTO messages (sender_id, receiver_id, text) VALUES (?, ?, ?)",
+    [session.user.id, user.id, text]
+  );
 
-  createNotification(
+  await createNotification(
     user.id,
     "message",
     Number(session.user.id),

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb, createNotification } from "@/lib/db";
+import { dbGet, dbRun, createNotification } from "@/lib/db";
 
 export async function POST(
   _request: NextRequest,
@@ -12,26 +12,27 @@ export async function POST(
   }
 
   const { id: postId } = await params;
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT id FROM likes WHERE user_id = ? AND post_id = ?")
-    .get(session.user.id, postId);
+  const existing = await dbGet(
+    "SELECT id FROM likes WHERE user_id = ? AND post_id = ?",
+    [session.user.id, postId]
+  );
 
   if (existing) {
-    db.prepare("DELETE FROM likes WHERE user_id = ? AND post_id = ?").run(
+    await dbRun("DELETE FROM likes WHERE user_id = ? AND post_id = ?", [
       session.user.id,
-      postId
-    );
+      postId,
+    ]);
   } else {
-    db.prepare("INSERT INTO likes (user_id, post_id) VALUES (?, ?)").run(
+    await dbRun("INSERT INTO likes (user_id, post_id) VALUES (?, ?)", [
       session.user.id,
-      postId
+      postId,
+    ]);
+    const post = await dbGet<{ user_id: number }>(
+      "SELECT user_id FROM posts_v2 WHERE id = ?",
+      [postId]
     );
-    const post = db
-      .prepare("SELECT user_id FROM posts_v2 WHERE id = ?")
-      .get(postId) as { user_id: number } | undefined;
     if (post)
-      createNotification(
+      await createNotification(
         post.user_id,
         "like",
         Number(session.user.id),
@@ -39,12 +40,13 @@ export async function POST(
       );
   }
 
-  const count = db
-    .prepare("SELECT COUNT(*) as count FROM likes WHERE post_id = ?")
-    .get(postId) as { count: number };
+  const count = await dbGet<{ count: number }>(
+    "SELECT COUNT(*) as count FROM likes WHERE post_id = ?",
+    [postId]
+  );
 
   return NextResponse.json({
     liked: !existing,
-    like_count: count.count,
+    like_count: count!.count,
   });
 }

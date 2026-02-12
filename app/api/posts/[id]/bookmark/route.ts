@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { dbGet, dbRun } from "@/lib/db";
 
 export async function POST(
   _request: NextRequest,
@@ -12,22 +12,22 @@ export async function POST(
   }
 
   const { id: postId } = await params;
-  const db = getDb();
-  const existing = db
-    .prepare("SELECT id FROM bookmarks WHERE user_id = ? AND post_id = ?")
-    .get(session.user.id, postId);
+  const existing = await dbGet(
+    "SELECT id FROM bookmarks WHERE user_id = ? AND post_id = ?",
+    [session.user.id, postId]
+  );
 
   if (existing) {
-    db.prepare("DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?").run(
+    await dbRun("DELETE FROM bookmarks WHERE user_id = ? AND post_id = ?", [
       session.user.id,
-      postId
-    );
+      postId,
+    ]);
     return NextResponse.json({ bookmarked: false });
   } else {
-    db.prepare("INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)").run(
+    await dbRun("INSERT INTO bookmarks (user_id, post_id) VALUES (?, ?)", [
       session.user.id,
-      postId
-    );
+      postId,
+    ]);
     return NextResponse.json({ bookmarked: true });
   }
 }

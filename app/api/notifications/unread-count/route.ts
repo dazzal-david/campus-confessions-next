@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { dbGet } from "@/lib/db";
 
 export async function GET() {
   const session = await auth();
@@ -8,12 +8,10 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const db = getDb();
-  const row = db
-    .prepare(
-      "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0"
-    )
-    .get(session.user.id) as { count: number };
+  const row = await dbGet<{ count: number }>(
+    "SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0",
+    [session.user.id]
+  );
 
-  return NextResponse.json({ count: row.count });
+  return NextResponse.json({ count: row!.count });
 }

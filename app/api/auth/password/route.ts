@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getDb } from "@/lib/db";
+import { dbGet, dbRun } from "@/lib/db";
 import { hashPassword, verifyPassword } from "@/lib/auth-helpers";
 
 export async function PUT(request: NextRequest) {
@@ -24,10 +24,10 @@ export async function PUT(request: NextRequest) {
     );
   }
 
-  const db = getDb();
-  const user = db
-    .prepare("SELECT password_hash FROM users WHERE id = ?")
-    .get(session.user.id) as { password_hash: string } | undefined;
+  const user = await dbGet<{ password_hash: string }>(
+    "SELECT password_hash FROM users WHERE id = ?",
+    [session.user.id]
+  );
 
   if (!user) {
     return NextResponse.json({ error: "Server error" }, { status: 500 });
@@ -42,10 +42,10 @@ export async function PUT(request: NextRequest) {
   }
 
   const hash = await hashPassword(new_password);
-  db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(
+  await dbRun("UPDATE users SET password_hash = ? WHERE id = ?", [
     hash,
-    session.user.id
-  );
+    session.user.id,
+  ]);
 
   return NextResponse.json({ success: true });
 }
